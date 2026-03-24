@@ -5,9 +5,119 @@ sidebar_label: Migration Guide
 description: How to migrate an existing frontend plugin to the new frontend system
 ---
 
-This guide allows you to migrate a frontend plugin and its own components, routes, apis to the new frontend system.
+This guide covers how to migrate a frontend plugin and its components, routes, and APIs to the new frontend system (NFS).
 
-The main concept is that routes, components, apis are now extensions. You can use the appropriate [extension blueprints](../architecture/23-extension-blueprints.md) to migrate all of them to extensions.
+The main concept is that routes, components, and APIs are now extensions. You can use the appropriate [extension blueprints](../architecture/23-extension-blueprints.md) to migrate all of them to extensions.
+
+There are two migration paths depending on whether your plugin needs to remain compatible with the legacy frontend system:
+
+- **Internal plugins** — plugins used only within your own project. You can replace the legacy code directly without maintaining a compatibility layer.
+- **Published plugins** — plugins shared with or consumed by external Backstage apps. You must keep the legacy system support intact alongside the new system.
+
+This page covers both paths. If you are migrating a published plugin, skip ahead to [Migrating published plugins](#migrating-the-plugin).
+
+## Migrating internal plugins
+
+For plugins that are only used within your own project, you can migrate directly by replacing the legacy plugin code in place. There is no need to create a separate `src/alpha.tsx` entry point or maintain dual exports.
+
+### Updating the plugin definition
+
+Replace the `createPlugin` call from `@backstage/core-plugin-api` with `createFrontendPlugin` from `@backstage/frontend-plugin-api` directly in your existing `src/plugin.ts` file:
+
+```ts title="src/plugin.ts"
+import { createFrontendPlugin } from '@backstage/frontend-plugin-api';
+
+export const myPlugin = createFrontendPlugin({
+  // The plugin ID is now provided as `pluginId` instead of `id`
+  pluginId: 'my-plugin',
+  extensions: [
+    /* extensions will go here */
+  ],
+  routes: {
+    // ...
+  },
+  externalRoutes: {
+    // ...
+  },
+});
+```
+
+Then update `src/index.ts` to export the plugin as the default export, which is required for the new frontend system:
+
+```ts title="src/index.ts"
+export { myPlugin as default } from './plugin';
+```
+
+### Migrating pages
+
+Replace `createRoutableExtension` with `PageBlueprint`:
+
+```tsx title="src/plugin.ts"
+import {
+  createFrontendPlugin,
+  PageBlueprint,
+} from '@backstage/frontend-plugin-api';
+import { rootRouteRef } from './routes';
+
+const fooPage = PageBlueprint.make({
+  params: {
+    path: '/foo',
+    routeRef: rootRouteRef,
+    loader: () => import('./components/FooPage').then(m => <m.FooPage />),
+  },
+});
+
+export const myPlugin = createFrontendPlugin({
+  pluginId: 'my-plugin',
+  extensions: [fooPage],
+  routes: {
+    root: rootRouteRef,
+  },
+});
+```
+
+### Migrating utility APIs
+
+Replace `createApiFactory` with `ApiBlueprint` and update the import from `@backstage/core-plugin-api` to `@backstage/frontend-plugin-api`:
+
+```tsx title="src/plugin.ts"
+import { ApiBlueprint, storageApiRef } from '@backstage/frontend-plugin-api';
+import { workApiRef } from './api';
+import { WorkImpl } from './WorkImpl';
+
+const workApi = ApiBlueprint.make({
+  params: defineParams =>
+    defineParams({
+      api: workApiRef,
+      deps: { storageApi: storageApiRef },
+      factory: ({ storageApi }) => new WorkImpl({ storageApi }),
+    }),
+});
+```
+
+Then add the extension to your plugin:
+
+```tsx title="src/plugin.ts"
+export const myPlugin = createFrontendPlugin({
+  pluginId: 'my-plugin',
+  extensions: [workApi, fooPage],
+  routes: {
+    root: rootRouteRef,
+  },
+});
+```
+
+### Removing legacy exports
+
+Once you have migrated all extensions, remove any legacy plugin wiring that is no longer needed:
+
+- Exports of components created with `createRoutableExtension` or `createComponentExtension`.
+- API factories created with `createApiFactory` that are now handled by `ApiBlueprint`.
+- Any `Router` components or route wiring that was previously documented in the plugin README for use in `packages/app`.
+
+:::caution
+Before removing legacy exports, make sure no other part of your codebase still imports them. Search for the export names across your app and backend packages before deleting them.
+:::
 
 ## Migrating the plugin
 
