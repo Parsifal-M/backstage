@@ -50,9 +50,9 @@ export { myPlugin as default } from './plugin';
 
 ### Migrating pages
 
-Replace `createRoutableExtension` with `PageBlueprint`:
+Replace `createRoutableExtension` with `PageBlueprint`. Because the `loader` returns a JSX element, any file that uses `PageBlueprint` (or any other blueprint with a JSX loader) must use a `.tsx` extension. Rename `src/plugin.ts` to `src/plugin.tsx` and update the import in `src/index.ts` to match.
 
-```tsx title="src/plugin.ts"
+```tsx title="src/plugin.tsx"
 import {
   createFrontendPlugin,
   PageBlueprint,
@@ -212,7 +212,7 @@ and the following instruction in the plugin README:
 <Route path="/foo" element={<FooPage />} />
 ```
 
-it can be migrated as the following, keeping in mind that you may need to switch from `.ts` to `.tsx`:
+it can be migrated as the following. Because the `loader` returns a JSX element, any file that uses `PageBlueprint` (or any other blueprint with a JSX loader) must use a `.tsx` extension. Rename the file from `.ts` to `.tsx` if you have not done so already:
 
 ```tsx
 import { PageBlueprint } from '@backstage/frontend-plugin-api';
