@@ -9,22 +9,24 @@ This guide covers how to migrate a frontend plugin and its components, routes, a
 
 The main concept is that routes, components, and APIs are now extensions. You can use the appropriate [extension blueprints](../architecture/23-extension-blueprints.md) to migrate all of them to extensions.
 
-There are two migration paths depending on whether your plugin needs to remain compatible with the legacy frontend system:
+There are two migration paths:
 
-- **Internal plugins** — plugins used only within your own project. You can replace the legacy code directly without maintaining a compatibility layer.
-- **Published plugins** — plugins shared with or consumed by external Backstage apps. You must keep the legacy system support intact alongside the new system.
+- **Direct migration** — replace the legacy plugin code in place with no compatibility layer. This is the simplest approach and works well for internal plugins where you control all consumers and can cut over in a single change.
+- **Phased migration** — add new frontend system support via a separate `/alpha` export while keeping the legacy system working. This is required for published plugins consumed by external Backstage apps, but is also a valid choice for internal plugins where you want a more gradual rollout.
 
-This page covers both paths. If you are migrating a published plugin, skip ahead to [Migrating published plugins](#migrating-the-plugin).
+This page covers both paths. If you are doing a phased migration, skip ahead to [Phased migration](#phased-migration).
 
-## Migrating internal plugins
+## Direct migration
 
-For plugins that are only used within your own project, you can migrate directly by replacing the legacy plugin code in place. There is no need to create a separate `src/alpha.tsx` entry point or maintain dual exports.
+In a direct migration you replace the legacy plugin code in place. There is no need to create a separate `src/alpha.tsx` entry point or maintain dual exports.
 
 ### Updating the plugin definition
 
-Replace the `createPlugin` call from `@backstage/core-plugin-api` with `createFrontendPlugin` from `@backstage/frontend-plugin-api` directly in your existing `src/plugin.ts` file:
+Start by renaming `src/plugin.ts` to `src/plugin.tsx`. Extensions that render JSX (such as pages) require a `.tsx` file, and renaming upfront avoids hard-to-diagnose errors later when you add them.
 
-```ts title="src/plugin.ts"
+Replace the `createPlugin` call from `@backstage/core-plugin-api` with `createFrontendPlugin` from `@backstage/frontend-plugin-api`:
+
+```ts title="src/plugin.tsx"
 import { createFrontendPlugin } from '@backstage/frontend-plugin-api';
 
 export const myPlugin = createFrontendPlugin({
@@ -42,7 +44,7 @@ export const myPlugin = createFrontendPlugin({
 });
 ```
 
-Then update `src/index.ts` to export the plugin as the default export, which is required for the new frontend system:
+Then update `src/index.ts` to export the plugin as the default export, which is required for the new frontend system, and update the import path to use the renamed file:
 
 ```ts title="src/index.ts"
 export { myPlugin as default } from './plugin';
@@ -50,7 +52,7 @@ export { myPlugin as default } from './plugin';
 
 ### Migrating pages
 
-Replace `createRoutableExtension` with `PageBlueprint`. Because the `loader` returns a JSX element, any file that uses `PageBlueprint` (or any other blueprint with a JSX loader) must use a `.tsx` extension. Rename `src/plugin.ts` to `src/plugin.tsx` and update the import in `src/index.ts` to match.
+Replace `createRoutableExtension` with `PageBlueprint`:
 
 ```tsx title="src/plugin.tsx"
 import {
@@ -80,7 +82,7 @@ export const myPlugin = createFrontendPlugin({
 
 Replace `createApiFactory` with `ApiBlueprint` and update the import from `@backstage/core-plugin-api` to `@backstage/frontend-plugin-api`:
 
-```tsx title="src/plugin.ts"
+```tsx title="src/plugin.tsx"
 import { ApiBlueprint, storageApiRef } from '@backstage/frontend-plugin-api';
 import { workApiRef } from './api';
 import { WorkImpl } from './WorkImpl';
@@ -97,7 +99,7 @@ const workApi = ApiBlueprint.make({
 
 Then add the extension to your plugin:
 
-```tsx title="src/plugin.ts"
+```tsx title="src/plugin.tsx"
 export const myPlugin = createFrontendPlugin({
   pluginId: 'my-plugin',
   extensions: [workApi, fooPage],
@@ -119,11 +121,11 @@ Once you have migrated all extensions, remove any legacy plugin wiring that is n
 Before removing legacy exports, make sure no other part of your codebase still imports them. Search for the export names across your app and backend packages before deleting them.
 :::
 
-## Migrating the plugin
+## Phased migration
 
 :::note Note
 
-Unless you are migrating a plugin that is only used within your own project, we recommend all plugins to keep support for the old system intact. The code added in these examples should be added to a new `src/alpha.tsx` entry point of your plugin.
+In a phased migration you keep the old system support intact while adding new frontend system support alongside it. The code added in these examples should go in a new `src/alpha.tsx` entry point of your plugin. This approach is required for published plugins and is also a valid choice for internal plugins that need a more gradual rollout.
 
 :::
 
